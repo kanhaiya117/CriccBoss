@@ -12,7 +12,7 @@ CricBoss is a Flutter Android app for live cricket scores, ball-by-ball commenta
 - flutter_tts for English and Hindi commentary
 - flutter_local_notifications and vibration for smart alerts
 - flutter_overlay_window for Android score bubble
-- google_mobile_ads with app-open cooldown and adaptive banners
+- Ads service placeholder with app-open cooldown policy. The native ad SDK is disabled in the safe APK build until device startup stability is confirmed.
 
 ## API Failover
 
@@ -49,7 +49,7 @@ The UI never depends on empty API responses; it falls back to realistic local ma
 - Package id: `com.cricboss.app`
 - Overlay permission is requested when the score bubble is opened.
 - Android 13+ notification permission is requested at app startup.
-- Test AdMob ids are included. Replace them before release.
+- Native ad SDK is currently disabled for the safe APK build. Re-enable after device startup validation.
 
 ## Build
 
