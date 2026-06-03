@@ -22,6 +22,7 @@ class _AdaptiveBannerState extends ConsumerState<AdaptiveBanner> {
   Future<void> _load() async {
     if (_ad != null) return;
     final ad = await ref.read(adsServiceProvider).createAdaptiveBanner(context);
+    if (ad == null) return;
     if (mounted) setState(() => _ad = ad);
   }
 

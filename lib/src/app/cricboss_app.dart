@@ -18,9 +18,11 @@ class _CricBossAppState extends ConsumerState<CricBossApp> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => ref.read(adsServiceProvider).showAppOpenAdOnce(),
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await ref.read(notificationServiceProvider).init();
+      await ref.read(adsServiceProvider).init();
+      await ref.read(adsServiceProvider).showAppOpenAdOnce();
+    });
   }
 
   @override

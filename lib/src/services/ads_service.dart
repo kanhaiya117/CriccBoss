@@ -11,10 +11,20 @@ class AdsService {
   static const testBannerAdUnit = 'ca-app-pub-3940256099942544/9214589741';
 
   AppOpenAd? _appOpenAd;
+  bool _initialized = false;
 
-  Future<void> init() => MobileAds.instance.initialize();
+  Future<void> init() async {
+    if (_initialized) return;
+    try {
+      await MobileAds.instance.initialize();
+      _initialized = true;
+    } catch (_) {
+      _initialized = false;
+    }
+  }
 
   Future<void> showAppOpenAdOnce() async {
+    if (!_initialized) return;
     if (_appOpenAd != null) {
       return;
     }
@@ -23,31 +33,38 @@ class AdsService {
         DateTime.now().difference(lastShown) < AppConfig.adOpenCooldown) {
       return;
     }
-    await AppOpenAd.load(
-      adUnitId: testAppOpenAdUnit,
-      request: const AdRequest(),
-      adLoadCallback: AppOpenAdLoadCallback(
-        onAdLoaded: (ad) async {
-          _appOpenAd = ad
-            ..fullScreenContentCallback = FullScreenContentCallback(
-              onAdDismissedFullScreenContent: (ad) {
-                ad.dispose();
-                _appOpenAd = null;
-              },
-              onAdFailedToShowFullScreenContent: (ad, _) {
-                ad.dispose();
-                _appOpenAd = null;
-              },
-            )
-            ..show();
-          await LocalStorageService.instance.setLastAppOpenAdAt(DateTime.now());
-        },
-        onAdFailedToLoad: (_) {},
-      ),
-    );
+    try {
+      await AppOpenAd.load(
+        adUnitId: testAppOpenAdUnit,
+        request: const AdRequest(),
+        adLoadCallback: AppOpenAdLoadCallback(
+          onAdLoaded: (ad) async {
+            _appOpenAd = ad
+              ..fullScreenContentCallback = FullScreenContentCallback(
+                onAdDismissedFullScreenContent: (ad) {
+                  ad.dispose();
+                  _appOpenAd = null;
+                },
+                onAdFailedToShowFullScreenContent: (ad, _) {
+                  ad.dispose();
+                  _appOpenAd = null;
+                },
+              )
+              ..show();
+            await LocalStorageService.instance.setLastAppOpenAdAt(
+              DateTime.now(),
+            );
+          },
+          onAdFailedToLoad: (_) {},
+        ),
+      );
+    } catch (_) {
+      _appOpenAd = null;
+    }
   }
 
-  Future<BannerAd> createAdaptiveBanner(BuildContext context) async {
+  Future<BannerAd?> createAdaptiveBanner(BuildContext context) async {
+    if (!_initialized) return null;
     final size = await AdSize.getLargeAnchoredAdaptiveBannerAdSize(
       MediaQuery.sizeOf(context).width.truncate(),
     );
@@ -57,7 +74,12 @@ class AdsService {
       listener: const BannerAdListener(),
       request: const AdRequest(),
     );
-    await ad.load();
-    return ad;
+    try {
+      await ad.load();
+      return ad;
+    } catch (_) {
+      ad.dispose();
+      return null;
+    }
   }
 }

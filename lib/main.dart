@@ -1,9 +1,9 @@
+import 'dart:async';
+
 import 'package:cricboss/src/app/cricboss_app.dart';
-import 'package:cricboss/src/services/ads_service.dart';
 import 'package:cricboss/src/services/local_storage_service.dart';
-import 'package:cricboss/src/services/notification_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 @pragma('vm:entry-point')
@@ -13,11 +13,24 @@ void overlayMain() {
 }
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await LocalStorageService.instance.init();
-  await NotificationService.instance.init();
-  await AdsService.instance.init();
-  await FlutterOverlayWindow.isPermissionGranted();
+  await runZonedGuarded(
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
+      FlutterError.onError = (details) {
+        FlutterError.presentError(details);
+        if (kDebugMode) {
+          debugPrint(details.exceptionAsString());
+        }
+      };
 
-  runApp(const ProviderScope(child: CricBossApp()));
+      await LocalStorageService.instance.init();
+      runApp(const ProviderScope(child: CricBossApp()));
+    },
+    (error, stack) {
+      if (kDebugMode) {
+        debugPrint('Uncaught app error: $error');
+        debugPrintStack(stackTrace: stack);
+      }
+    },
+  );
 }
