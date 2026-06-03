@@ -48,7 +48,7 @@ class AdsService {
   }
 
   Future<BannerAd> createAdaptiveBanner(BuildContext context) async {
-    final size = await AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(
+    final size = await AdSize.getLargeAnchoredAdaptiveBannerAdSize(
       MediaQuery.sizeOf(context).width.truncate(),
     );
     final ad = BannerAd(
