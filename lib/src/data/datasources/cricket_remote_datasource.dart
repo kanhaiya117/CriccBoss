@@ -1,5 +1,4 @@
 import 'package:cricboss/src/config/app_config.dart';
-import 'package:cricboss/src/data/mock/mock_cricket_factory.dart';
 import 'package:cricboss/src/domain/models/cricket_models.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -9,22 +8,16 @@ abstract class CricketDataSource {
   Future<CricketMatch> getMatch(String id);
 }
 
-class FailoverCricketDataSource implements CricketDataSource {
-  FailoverCricketDataSource(this._dio, this._mock);
+class RapidApiCricketDataSource implements CricketDataSource {
+  RapidApiCricketDataSource(this._dio);
 
   final Dio _dio;
-  final MockCricketFactory _mock;
 
   @override
   Future<List<CricketMatch>> getMatches() async {
-    if (kMockMode) return _mock.matches();
-    final cricketData = await _tryCricketData();
-    if (cricketData.isNotEmpty) return cricketData;
-    final cricApi = await _tryCricApi();
-    if (cricApi.isNotEmpty) return cricApi;
     final rapidApi = await _tryRapidApiCricket();
     if (rapidApi.isNotEmpty) return rapidApi;
-    return _mock.matches();
+    return const [];
   }
 
   @override
@@ -32,34 +25,8 @@ class FailoverCricketDataSource implements CricketDataSource {
     final matches = await getMatches();
     return matches.firstWhere(
       (match) => match.id == id,
-      orElse: () => _mock.matches().first,
+      orElse: () => throw StateError('Match not found'),
     );
-  }
-
-  Future<List<CricketMatch>> _tryCricketData() async {
-    if (AppConfig.cricketDataApiKey.isEmpty) return const [];
-    try {
-      final response = await _dio.get(
-        '${AppConfig.cricketDataBaseUrl}/matches',
-        queryParameters: {'apikey': AppConfig.cricketDataApiKey},
-      );
-      return _parseMatches(response.data);
-    } catch (_) {
-      return const [];
-    }
-  }
-
-  Future<List<CricketMatch>> _tryCricApi() async {
-    if (AppConfig.cricApiKey.isEmpty) return const [];
-    try {
-      final response = await _dio.get(
-        '${AppConfig.cricApiBaseUrl}/currentMatches',
-        queryParameters: {'apikey': AppConfig.cricApiKey},
-      );
-      return _parseMatches(response.data);
-    } catch (_) {
-      return const [];
-    }
   }
 
   Future<List<CricketMatch>> _tryRapidApiCricket() async {
@@ -104,9 +71,8 @@ class FailoverCricketDataSource implements CricketDataSource {
     final items = _extractItems(payload);
     if (items is! List || items.isEmpty) return const [];
 
-    final fallback = _mock.matches();
     return items.take(20).map((item) {
-      if (item is! Map) return fallback.first;
+      if (item is! Map) return _emptyMatch('${item.hashCode}');
       final name = '${item['name'] ?? item['title'] ?? 'Live cricket match'}';
       final teamNames = _teamNames(item, name);
       final teamA = Team(
@@ -130,7 +96,7 @@ class FailoverCricketDataSource implements CricketDataSource {
                 statusText.contains('upcoming')
           ? MatchStatus.upcoming
           : defaultStatus;
-      return fallback.first.copyWith(
+      return _emptyMatch(_matchId(item, name)).copyWith(
         id: _matchId(item, name),
         title: name,
         series:
@@ -226,5 +192,34 @@ class FailoverCricketDataSource implements CricketDataSource {
       if (seen.add(match.id)) result.add(match);
     }
     return result;
+  }
+
+  CricketMatch _emptyMatch(String id) {
+    const teamA = Team(
+      id: 'team-a',
+      name: 'Team A',
+      shortName: 'TMA',
+      country: 'Unknown',
+    );
+    const teamB = Team(
+      id: 'team-b',
+      name: 'Team B',
+      shortName: 'TMB',
+      country: 'Unknown',
+    );
+    return CricketMatch(
+      id: id,
+      title: 'Live cricket match',
+      series: 'Cricket',
+      venue: 'Venue updating',
+      startTime: DateTime.now(),
+      status: MatchStatus.live,
+      teamA: teamA,
+      teamB: teamB,
+      scores: const [],
+      commentary: const [],
+      scorecard: const Scorecard(batting: [], bowling: []),
+      players: const [],
+    );
   }
 }

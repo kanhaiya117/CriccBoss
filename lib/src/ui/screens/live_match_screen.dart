@@ -23,8 +23,14 @@ class _LiveMatchScreenState extends ConsumerState<LiveMatchScreen> {
       appBar: AppBar(title: const Text('Live Match')),
       body: asyncMatch.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) =>
-            _MatchBody(match: ref.read(mockFactoryProvider).matches().first),
+        error: (_, _) => const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'Match details are unavailable from the API right now.',
+            ),
+          ),
+        ),
         data: (match) {
           _handleLiveSystems(match);
           return _MatchBody(match: match);

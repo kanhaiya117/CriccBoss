@@ -6,7 +6,7 @@ CricBoss is a Flutter Android app for live cricket scores, ball-by-ball commenta
 
 - Flutter stable and Dart with null safety
 - Riverpod for app state
-- Dio for CricketData, CricAPI, and RapidAPI cricket clients
+- Dio for RapidAPI cricket data and cricket news RSS
 - Hive for local settings and favorites
 - Material 3 light and dark themes
 - flutter_tts for English and Hindi commentary
@@ -16,32 +16,15 @@ CricBoss is a Flutter Android app for live cricket scores, ball-by-ball commenta
 
 ## API Failover
 
-Failover order is:
-
-1. CricketData
-2. CricAPI
-3. RapidAPI Cricket Live Data
-4. Mock data
-
-Mock mode is currently enabled in `lib/src/config/app_config.dart`:
-
-```dart
-const bool kMockMode = true;
-```
-
-When switching to live APIs, set `kMockMode` to `false` and pass keys:
+Live cricket data uses RapidAPI Cricket Live Data:
 
 ```bash
-flutter run --dart-define=CRICKETDATA_API_KEY=your_key --dart-define=CRICAPI_KEY=your_key --dart-define=RAPIDAPI_CRICKET_KEY=your_key
+flutter run --dart-define=RAPIDAPI_CRICKET_KEY=your_key
 ```
 
-For GitHub Actions, add these repository secrets:
+For GitHub Actions, add `RAPIDAPI_CRICKET_KEY` as a repository secret.
 
-- `CRICKETDATA_API_KEY`
-- `CRICAPI_KEY`
-- `RAPIDAPI_CRICKET_KEY`
-
-The UI never depends on empty API responses; it falls back to realistic local matches, players, commentary, scorecards, and events.
+Cricket news uses a free RSS feed and shows the latest three cricket articles on the dashboard.
 
 ## Android
 

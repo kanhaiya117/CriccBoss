@@ -101,7 +101,7 @@ class _Dashboard extends ConsumerWidget {
     return matches.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (_, _) => _DashboardContent(
-        matches: ref.read(mockFactoryProvider).matches(),
+        matches: const [],
         favorites: favorites,
         savedIds: savedIds,
         onOpen: onOpen,
@@ -109,9 +109,7 @@ class _Dashboard extends ConsumerWidget {
         offline: true,
       ),
       data: (items) => _DashboardContent(
-        matches: items.isEmpty
-            ? ref.read(mockFactoryProvider).matches()
-            : items,
+        matches: items,
         favorites: favorites,
         savedIds: savedIds,
         onOpen: onOpen,
@@ -156,7 +154,8 @@ class _DashboardContent extends StatelessWidget {
           if (offline)
             const _InfoBanner(
               icon: Icons.cloud_off,
-              text: 'Live API unavailable. Showing cached/mock cricket data.',
+              text:
+                  'Live API unavailable. Pull to refresh or check the RapidAPI key.',
             ),
           Row(
             children: [
@@ -177,7 +176,7 @@ class _DashboardContent extends StatelessWidget {
           else
             const _InfoBanner(
               icon: Icons.event_available,
-              text: 'No live match right now. Upcoming fixtures are ready.',
+              text: 'No live match available from the API right now.',
             ),
           const SizedBox(height: 18),
           GridView.count(
@@ -220,20 +219,13 @@ class _DashboardContent extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           Text(
-            'Upcoming',
+            'Top Cricket News',
             style: Theme.of(
               context,
             ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 12),
-          for (final match in upcoming.take(3)) ...[
-            MatchCard(
-              match: match,
-              compact: true,
-              onTap: () => onOpen(match.id),
-            ),
-            const SizedBox(height: 12),
-          ],
+          const _TopNewsList(),
         ],
       ),
     );
@@ -264,6 +256,52 @@ class _DashboardContent extends StatelessWidget {
       MaterialPageRoute(
         builder: (_) => MatchListScreen(title: title, matches: matches),
       ),
+    );
+  }
+}
+
+class _TopNewsList extends ConsumerWidget {
+  const _TopNewsList();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final news = ref.watch(cricketNewsProvider);
+    return news.when(
+      loading: () => const LinearProgressIndicator(),
+      error: (_, _) => const _InfoBanner(
+        icon: Icons.article_outlined,
+        text: 'Cricket news is unavailable right now.',
+      ),
+      data: (items) {
+        if (items.isEmpty) {
+          return const _InfoBanner(
+            icon: Icons.article_outlined,
+            text: 'No cricket news available right now.',
+          );
+        }
+        return Column(
+          children: [
+            for (final item in items) ...[
+              Card(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: ListTile(
+                  leading: const CircleAvatar(child: Icon(Icons.newspaper)),
+                  title: Text(
+                    item.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  subtitle: Text(item.source),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+          ],
+        );
+      },
     );
   }
 }

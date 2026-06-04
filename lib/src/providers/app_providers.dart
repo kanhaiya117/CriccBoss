@@ -1,10 +1,10 @@
 import 'package:cricboss/src/data/datasources/cricket_remote_datasource.dart';
-import 'package:cricboss/src/data/mock/mock_cricket_factory.dart';
 import 'package:cricboss/src/data/repositories/cricket_repository_impl.dart';
 import 'package:cricboss/src/domain/models/cricket_models.dart';
 import 'package:cricboss/src/domain/repositories/cricket_repository.dart';
 import 'package:cricboss/src/services/ads_service.dart';
 import 'package:cricboss/src/services/country_service.dart';
+import 'package:cricboss/src/services/cricket_news_service.dart';
 import 'package:cricboss/src/services/local_storage_service.dart';
 import 'package:cricboss/src/services/notification_service.dart';
 import 'package:cricboss/src/services/overlay_service.dart';
@@ -23,17 +23,16 @@ final dioProvider = Provider(
     ),
   ),
 );
-final mockFactoryProvider = Provider((ref) => MockCricketFactory());
 final cricketRepositoryProvider = Provider<CricketRepository>((ref) {
   return CricketRepositoryImpl(
-    FailoverCricketDataSource(
-      ref.watch(dioProvider),
-      ref.watch(mockFactoryProvider),
-    ),
+    RapidApiCricketDataSource(ref.watch(dioProvider)),
   );
 });
 final matchesProvider = StreamProvider(
   (ref) => ref.watch(cricketRepositoryProvider).watchMatches(),
+);
+final cricketNewsProvider = FutureProvider(
+  (ref) => CricketNewsService(ref.watch(dioProvider)).latest(),
 );
 final matchProvider = FutureProvider.family<CricketMatch, String>(
   (ref, id) => ref.watch(cricketRepositoryProvider).getMatch(id),

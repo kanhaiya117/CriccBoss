@@ -70,9 +70,9 @@ class SettingsScreen extends ConsumerWidget {
         const SizedBox(height: 24),
         ListTile(
           leading: const Icon(Icons.info_outline),
-          title: const Text('API failover'),
+          title: const Text('Live data'),
           subtitle: const Text(
-            'CricketData, CricAPI, then mock data. Mock mode is enabled for reliable local builds.',
+            'RapidAPI Cricket Live Data is used for fixtures and results.',
           ),
         ),
       ],
