@@ -3,6 +3,7 @@ import 'package:cricboss/src/providers/app_providers.dart';
 import 'package:cricboss/src/ui/screens/favorites_screen.dart';
 import 'package:cricboss/src/ui/screens/live_match_screen.dart';
 import 'package:cricboss/src/ui/screens/match_list_screen.dart';
+import 'package:cricboss/src/ui/screens/news_detail_screen.dart';
 import 'package:cricboss/src/ui/screens/settings_screen.dart';
 import 'package:cricboss/src/ui/widgets/adaptive_banner.dart';
 import 'package:cricboss/src/ui/widgets/match_card.dart';
@@ -287,6 +288,11 @@ class _TopNewsList extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: ListTile(
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => NewsDetailScreen(article: item),
+                    ),
+                  ),
                   leading: const CircleAvatar(child: Icon(Icons.newspaper)),
                   title: Text(
                     item.title,
@@ -294,7 +300,12 @@ class _TopNewsList extends ConsumerWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontWeight: FontWeight.w800),
                   ),
-                  subtitle: Text(item.source),
+                  subtitle: Text(
+                    item.summary.isEmpty ? item.source : item.summary,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
                 ),
               ),
               const SizedBox(height: 10),
