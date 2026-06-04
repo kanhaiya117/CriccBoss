@@ -2,6 +2,7 @@ import 'package:cricboss/src/domain/models/cricket_models.dart';
 import 'package:cricboss/src/providers/app_providers.dart';
 import 'package:cricboss/src/ui/screens/favorites_screen.dart';
 import 'package:cricboss/src/ui/screens/live_match_screen.dart';
+import 'package:cricboss/src/ui/screens/match_list_screen.dart';
 import 'package:cricboss/src/ui/screens/settings_screen.dart';
 import 'package:cricboss/src/ui/widgets/adaptive_banner.dart';
 import 'package:cricboss/src/ui/widgets/match_card.dart';
@@ -21,13 +22,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final pages = [
-      _MatchesView(onOpen: _openMatch),
+      _Dashboard(onOpen: _openMatch),
       const FavoritesScreen(),
       const SettingsScreen(),
     ];
     return Scaffold(
       appBar: AppBar(
-        title: const Text('CricBoss'),
+        title: Row(
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Padding(
+                padding: EdgeInsets.all(7),
+                child: Icon(Icons.sports_cricket, size: 22),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'CricBoss',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             onPressed: () => ref.invalidate(matchesProvider),
@@ -46,8 +67,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onDestinationSelected: (value) => setState(() => _index = value),
             destinations: const [
               NavigationDestination(
-                icon: Icon(Icons.sports_cricket),
-                label: 'Matches',
+                icon: Icon(Icons.dashboard_outlined),
+                selectedIcon: Icon(Icons.dashboard),
+                label: 'Home',
               ),
               NavigationDestination(
                 icon: Icon(Icons.star_border),
@@ -66,8 +88,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       Navigator.of(context).pushNamed(LiveMatchScreen.route, arguments: id);
 }
 
-class _MatchesView extends ConsumerWidget {
-  const _MatchesView({required this.onOpen});
+class _Dashboard extends ConsumerWidget {
+  const _Dashboard({required this.onOpen});
 
   final ValueChanged<String> onOpen;
 
@@ -75,51 +97,304 @@ class _MatchesView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final matches = ref.watch(matchesProvider);
     final favorites = ref.watch(favoriteTeamsProvider);
+    final savedIds = ref.watch(savedMatchIdsProvider);
     return matches.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (_, _) => _List(
+      error: (_, _) => _DashboardContent(
         matches: ref.read(mockFactoryProvider).matches(),
         favorites: favorites,
+        savedIds: savedIds,
         onOpen: onOpen,
+        onRefresh: () async => ref.invalidate(matchesProvider),
+        offline: true,
       ),
-      data: (items) => _List(
+      data: (items) => _DashboardContent(
         matches: items.isEmpty
             ? ref.read(mockFactoryProvider).matches()
             : items,
         favorites: favorites,
+        savedIds: savedIds,
         onOpen: onOpen,
+        onRefresh: () async => ref.invalidate(matchesProvider),
       ),
     );
   }
 }
 
-class _List extends StatelessWidget {
-  const _List({
+class _DashboardContent extends StatelessWidget {
+  const _DashboardContent({
     required this.matches,
     required this.favorites,
+    required this.savedIds,
     required this.onOpen,
+    required this.onRefresh,
+    this.offline = false,
   });
 
   final List<CricketMatch> matches;
   final List<String> favorites;
+  final List<String> savedIds;
   final ValueChanged<String> onOpen;
+  final Future<void> Function() onRefresh;
+  final bool offline;
 
   @override
   Widget build(BuildContext context) {
-    final sorted = [...matches]
-      ..sort((a, b) {
-        final af = favorites.any(a.involvesTeam) ? 0 : 1;
-        final bf = favorites.any(b.involvesTeam) ? 0 : 1;
-        return af.compareTo(bf);
-      });
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: sorted.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 12),
-      itemBuilder: (context, index) => MatchCard(
-        match: sorted[index],
-        onTap: () => onOpen(sorted[index].id),
+    final live = _byStatus(MatchStatus.live);
+    final upcoming = _byStatus(MatchStatus.upcoming);
+    final results = _byStatus(MatchStatus.completed).take(2).toList();
+    final saved = matches
+        .where((match) => savedIds.contains(match.id))
+        .toList();
+    final featured = _featuredMatch(live);
+
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+        children: [
+          if (offline)
+            const _InfoBanner(
+              icon: Icons.cloud_off,
+              text: 'Live API unavailable. Showing cached/mock cricket data.',
+            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Live Cricket',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const _LiveDot(),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (featured != null)
+            MatchCard(match: featured, onTap: () => onOpen(featured.id))
+          else
+            const _InfoBanner(
+              icon: Icons.event_available,
+              text: 'No live match right now. Upcoming fixtures are ready.',
+            ),
+          const SizedBox(height: 18),
+          GridView.count(
+            crossAxisCount: 2,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 1.35,
+            physics: const NeverScrollableScrollPhysics(),
+            shrinkWrap: true,
+            children: [
+              _DashboardTile(
+                icon: Icons.flash_on,
+                title: 'Live Matches',
+                count: live.length,
+                color: Colors.red,
+                onTap: () => _openList(context, 'Live Matches', live),
+              ),
+              _DashboardTile(
+                icon: Icons.event,
+                title: 'Upcoming',
+                count: upcoming.length,
+                color: Colors.blue,
+                onTap: () => _openList(context, 'Upcoming Matches', upcoming),
+              ),
+              _DashboardTile(
+                icon: Icons.emoji_events,
+                title: 'Results',
+                count: results.length,
+                color: Colors.green,
+                onTap: () => _openList(context, 'Recent Results', results),
+              ),
+              _DashboardTile(
+                icon: Icons.bookmark,
+                title: 'Saved Matches',
+                count: saved.length,
+                color: Colors.orange,
+                onTap: () => _openList(context, 'Saved Matches', saved),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Upcoming',
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 12),
+          for (final match in upcoming.take(3)) ...[
+            MatchCard(
+              match: match,
+              compact: true,
+              onTap: () => onOpen(match.id),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ],
       ),
     );
   }
+
+  List<CricketMatch> _byStatus(MatchStatus status) =>
+      matches.where((match) => match.status == status).toList();
+
+  CricketMatch? _featuredMatch(List<CricketMatch> live) {
+    if (live.isEmpty) return null;
+    final india = live.where((match) => match.involvesTeam('India')).toList();
+    if (india.isNotEmpty) return india.first;
+    final ipl = live.where((match) => match.isIpl).toList();
+    if (ipl.isNotEmpty) return ipl.first;
+    final favorite = live
+        .where((match) => favorites.any((team) => match.involvesTeam(team)))
+        .toList();
+    if (favorite.isNotEmpty) return favorite.first;
+    return live.first;
+  }
+
+  void _openList(
+    BuildContext context,
+    String title,
+    List<CricketMatch> matches,
+  ) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MatchListScreen(title: title, matches: matches),
+      ),
+    );
+  }
+}
+
+class _DashboardTile extends StatelessWidget {
+  const _DashboardTile({
+    required this.icon,
+    required this.title,
+    required this.count,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final int count;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              CircleAvatar(
+                backgroundColor: color.withValues(alpha: .14),
+                child: Icon(icon, color: color),
+              ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '$count',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: scheme.primary,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoBanner extends StatelessWidget {
+  const _InfoBanner({required this.icon, required this.text});
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      color: scheme.secondaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            Icon(icon, color: scheme.onSecondaryContainer),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                text,
+                style: TextStyle(color: scheme.onSecondaryContainer),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LiveDot extends StatefulWidget {
+  const _LiveDot();
+
+  @override
+  State<_LiveDot> createState() => _LiveDotState();
+}
+
+class _LiveDotState extends State<_LiveDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => FadeTransition(
+    opacity: Tween<double>(begin: .45, end: 1).animate(_controller),
+    child: const Row(
+      children: [
+        Icon(Icons.circle, color: Colors.red, size: 10),
+        SizedBox(width: 6),
+        Text('LIVE'),
+      ],
+    ),
+  );
 }

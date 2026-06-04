@@ -21,6 +21,40 @@ class LocalStorageService {
   Future<void> setFavoriteTeams(List<String> teams) =>
       _box.put('favoriteTeams', teams);
 
+  String? get pinnedMatchId => _box.get('pinnedMatchId') as String?;
+  Future<void> setPinnedMatchId(String? id) async {
+    if (id == null) {
+      await _box.delete('pinnedMatchId');
+    } else {
+      await _box.put('pinnedMatchId', id);
+    }
+  }
+
+  List<String> get savedMatchIds => List<String>.from(
+    _box.get('savedMatchIds', defaultValue: const <String>[]),
+  );
+  Future<void> setSavedMatchIds(List<String> ids) =>
+      _box.put('savedMatchIds', ids);
+
+  Set<AlertEventType> get enabledVoiceEvents {
+    final indexes = List<int>.from(
+      _box.get(
+        'enabledVoiceEvents',
+        defaultValue: const [0, 1, 2, 3, 4, 5, 6, 7],
+      ),
+    );
+    return {
+      for (final index in indexes)
+        if (index >= 0 && index < AlertEventType.values.length)
+          AlertEventType.values[index],
+    };
+  }
+
+  Future<void> setEnabledVoiceEvents(Set<AlertEventType> events) => _box.put(
+    'enabledVoiceEvents',
+    events.map((event) => event.index).toList(),
+  );
+
   ThemeMode get themeMode =>
       ThemeMode.values[_box.get(
         'themeMode',

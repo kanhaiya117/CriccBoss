@@ -1,6 +1,16 @@
 enum MatchStatus { live, upcoming, completed }
 
-enum AlertEventType { four, six, wicket, fifty, century, matchResult, normal }
+enum AlertEventType {
+  four,
+  six,
+  wicket,
+  fifty,
+  century,
+  inningsBreak,
+  partnership,
+  matchResult,
+  normal,
+}
 
 enum VoiceMode { importantOnly, fullCommentary, off }
 
@@ -96,12 +106,16 @@ class BowlingLine {
     required this.overs,
     required this.runs,
     required this.wickets,
+    this.maidens = 0,
   });
 
   final String playerName;
   final double overs;
   final int runs;
   final int wickets;
+  final int maidens;
+
+  double get economy => overs <= 0 ? 0 : runs / overs;
 }
 
 class Scorecard {
@@ -190,6 +204,56 @@ class CricketMatch {
   String get latestEvent => commentary.isEmpty
       ? 'Commentary will appear here.'
       : commentary.first.text;
+
+  bool get isIpl =>
+      series.toLowerCase().contains('ipl') ||
+      series.toLowerCase().contains('indian premier league') ||
+      teamA.id == 'mi' ||
+      teamA.id == 'csk' ||
+      teamA.id == 'rcb' ||
+      teamB.id == 'mi' ||
+      teamB.id == 'csk' ||
+      teamB.id == 'rcb';
+
+  InningsScore? scoreForTeam(String teamId) {
+    for (final score in scores) {
+      if (score.teamId == teamId) return score;
+    }
+    return null;
+  }
+
+  String scoreTextForTeam(Team team) {
+    final score = scoreForTeam(team.id);
+    if (score == null) {
+      return status == MatchStatus.upcoming ? 'Yet to Bat' : '0/0 (Yet to Bat)';
+    }
+    return score.display;
+  }
+
+  double? get currentRunRate {
+    final score = scores.isEmpty ? null : scores.last;
+    if (score == null || score.overs <= 0) return null;
+    return score.runs / score.overs;
+  }
+
+  int? get targetScore {
+    if (scores.length < 2) return null;
+    return scores.first.runs + 1;
+  }
+
+  double? get requiredRunRate {
+    final target = targetScore;
+    if (target == null || scores.length < 2) return null;
+    final chasing = scores.last;
+    final remainingOvers = 20 - chasing.overs;
+    if (remainingOvers <= 0) return null;
+    return (target - chasing.runs) / remainingOvers;
+  }
+
+  String get oversProgress {
+    if (scores.isEmpty) return '0.0/20';
+    return '${scores.last.overs.toStringAsFixed(1)}/20';
+  }
 
   CricketMatch copyWith({
     String? id,

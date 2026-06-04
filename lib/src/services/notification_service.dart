@@ -80,7 +80,16 @@ class NotificationService {
     AlertEventType.wicket => 'Wicket',
     AlertEventType.fifty => 'Fifty',
     AlertEventType.century => 'Century',
+    AlertEventType.inningsBreak => 'Innings break',
+    AlertEventType.partnership => 'Partnership',
     AlertEventType.matchResult => 'Match result',
     AlertEventType.normal => 'CricBoss',
   };
+
+  Future<void> cancelPinnedScore() async {
+    if (!_initialized) return;
+    try {
+      await _plugin.cancel(7);
+    } catch (_) {}
+  }
 }

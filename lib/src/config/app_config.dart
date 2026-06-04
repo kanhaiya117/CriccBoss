@@ -1,4 +1,4 @@
-const bool kMockMode = true;
+const bool kMockMode = false;
 
 class AppConfig {
   const AppConfig._();

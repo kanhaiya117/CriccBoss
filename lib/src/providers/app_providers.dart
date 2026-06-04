@@ -60,3 +60,12 @@ final voiceModeProvider = StateProvider<VoiceMode>(
 final languageProvider = StateProvider<CommentaryLanguage>(
   (ref) => ref.watch(storageProvider).language,
 );
+final pinnedMatchIdProvider = StateProvider<String?>(
+  (ref) => ref.watch(storageProvider).pinnedMatchId,
+);
+final savedMatchIdsProvider = StateProvider<List<String>>(
+  (ref) => ref.watch(storageProvider).savedMatchIds,
+);
+final enabledVoiceEventsProvider = StateProvider<Set<AlertEventType>>(
+  (ref) => ref.watch(storageProvider).enabledVoiceEvents,
+);
