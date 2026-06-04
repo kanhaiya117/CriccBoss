@@ -12,6 +12,7 @@ class RapidApiCricketDataSource implements CricketDataSource {
   RapidApiCricketDataSource(this._dio);
 
   final Dio _dio;
+  final Map<String, _CacheEntry<dynamic>> _cache = {};
 
   @override
   Future<List<CricketMatch>> getMatches() async {
@@ -29,46 +30,70 @@ class RapidApiCricketDataSource implements CricketDataSource {
         orElse: () => throw StateError('Match not found'),
       );
     }
-    final detail = await _getRapidApi('/match/$id');
-    final scorecard = await _getRapidApi('/match/$id/scorecard');
-    final commentary = await _getRapidApi('/match/$id/commentary');
-    final playingXi = await _getRapidApi('/match/$id/playingXI');
+    final listMatch = await _findMatchFromList(id);
+    final detail = await _getRapidApi(
+      '/match/$id',
+      ttl: AppConfig.matchInfoCache,
+    );
+    final scorecard = await _getRapidApi(
+      '/match/$id/scorecard',
+      ttl: AppConfig.liveDetailCache,
+    );
+    final commentary = await _getRapidApi(
+      '/match/$id/commentary',
+      ttl: AppConfig.liveDetailCache,
+    );
+    final playingXi = await _getRapidApi(
+      '/match/$id/playingXI',
+      ttl: AppConfig.squadCache,
+    );
+    final squads = await _getRapidApi(
+      '/match/$id/squads',
+      ttl: AppConfig.squadCache,
+    );
     final match = _parseLineMatch(
       _payloadData(detail),
       defaultStatus: MatchStatus.live,
     );
-    if (match != null) {
+    final baseMatch = _mergeListMatch(match, listMatch);
+    if (baseMatch != null) {
       return _enrichMatch(
-        match,
+        baseMatch,
         scorecard: scorecard,
         commentary: commentary,
         players: playingXi,
+        fallbackPlayers: squads,
       );
     }
-    final matches = await getMatches();
-    return matches.firstWhere(
-      (match) => match.id == id,
-      orElse: () => throw StateError('Match not found'),
-    );
+    throw StateError('Match not found');
   }
 
   Future<List<CricketMatch>> _tryRapidApiCricket() async {
     if (AppConfig.rapidApiCricketKey.isEmpty) return const [];
     final parsed = <CricketMatch>[
       ..._parseLineMatches(
-        await _getRapidApi('/liveMatches'),
+        await _getRapidApi('/liveMatches', ttl: AppConfig.liveDetailCache),
         defaultStatus: MatchStatus.live,
       ),
       ..._parseLineMatches(
-        await _getRapidApi('/recentMatches'),
+        await _getRapidApi('/recentMatches', ttl: AppConfig.recentMatchesCache),
         defaultStatus: MatchStatus.completed,
       ),
-      ..._parseSeries(await _getRapidApi('/series')),
+      ..._parseSeries(
+        await _getRapidApi('/series', ttl: AppConfig.seriesCache),
+      ),
     ];
     return _dedupeMatches(parsed);
   }
 
-  Future<dynamic> _getRapidApi(String path) async {
+  Future<dynamic> _getRapidApi(String path, {Duration? ttl}) async {
+    final cached = _cache[path];
+    final now = DateTime.now();
+    if (ttl != null &&
+        cached != null &&
+        now.difference(cached.createdAt) < ttl) {
+      return cached.value;
+    }
     try {
       final response = await _dio.get(
         '${AppConfig.rapidApiCricketBaseUrl}$path',
@@ -80,10 +105,32 @@ class RapidApiCricketDataSource implements CricketDataSource {
           },
         ),
       );
+      _cache[path] = _CacheEntry(response.data, now);
       return response.data;
-    } catch (_) {
+    } catch (error) {
+      if (cached != null) return cached.value;
       return null;
     }
+  }
+
+  Future<CricketMatch?> _findMatchFromList(String id) async {
+    final matches = await getMatches();
+    for (final match in matches) {
+      if (match.id == id) return match;
+    }
+    return null;
+  }
+
+  CricketMatch? _mergeListMatch(CricketMatch? detail, CricketMatch? list) {
+    if (detail == null) return list;
+    if (list == null) return detail;
+    return detail.copyWith(
+      scores: detail.scores.isEmpty ? list.scores : detail.scores,
+      commentary: detail.commentary.isEmpty
+          ? list.commentary
+          : detail.commentary,
+      result: detail.result ?? list.result,
+    );
   }
 
   @visibleForTesting
@@ -174,16 +221,24 @@ class RapidApiCricketDataSource implements CricketDataSource {
     required dynamic scorecard,
     required dynamic commentary,
     required dynamic players,
+    dynamic fallbackPlayers,
   }) {
     final parsedScorecard = _parseScorecard(scorecard);
     final parsedCommentary = _parseCommentary(commentary);
     final parsedPlayers = _parsePlayers(players, match.teamA, match.teamB);
+    final parsedFallbackPlayers = parsedPlayers.isEmpty
+        ? _parsePlayers(fallbackPlayers, match.teamA, match.teamB)
+        : const <Player>[];
     return match.copyWith(
       scorecard: parsedScorecard ?? match.scorecard,
       commentary: parsedCommentary.isEmpty
           ? match.commentary
           : parsedCommentary.take(80).toList(),
-      players: parsedPlayers.isEmpty ? match.players : parsedPlayers,
+      players: parsedPlayers.isEmpty
+          ? parsedFallbackPlayers.isEmpty
+                ? match.players
+                : parsedFallbackPlayers
+          : parsedPlayers,
     );
   }
 
@@ -605,4 +660,11 @@ class RapidApiCricketDataSource implements CricketDataSource {
       players: const [],
     );
   }
+}
+
+class _CacheEntry<T> {
+  const _CacheEntry(this.value, this.createdAt);
+
+  final T value;
+  final DateTime createdAt;
 }

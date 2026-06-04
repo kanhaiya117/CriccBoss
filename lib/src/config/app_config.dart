@@ -15,5 +15,11 @@ class AppConfig {
       ? _fallbackRapidApiCricketKey
       : _envRapidApiCricketKey;
   static const adOpenCooldown = Duration(hours: 12);
-  static const liveRefresh = Duration(seconds: 8);
+  static const liveRefresh = Duration(seconds: 30);
+  static const matchRefresh = Duration(seconds: 20);
+  static const recentMatchesCache = Duration(minutes: 5);
+  static const seriesCache = Duration(minutes: 30);
+  static const matchInfoCache = Duration(minutes: 10);
+  static const squadCache = Duration(minutes: 30);
+  static const liveDetailCache = Duration(seconds: 20);
 }

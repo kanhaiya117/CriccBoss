@@ -12,7 +12,9 @@ class NotificationService {
   Future<void> init() async {
     if (_initialized) return;
     try {
-      const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const android = AndroidInitializationSettings(
+        '@drawable/ic_cricboss_launcher',
+      );
       await _plugin.initialize(const InitializationSettings(android: android));
       await _plugin
           .resolvePlatformSpecificImplementation<

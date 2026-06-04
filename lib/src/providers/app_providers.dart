@@ -1,3 +1,4 @@
+import 'package:cricboss/src/config/app_config.dart';
 import 'package:cricboss/src/data/datasources/cricket_remote_datasource.dart';
 import 'package:cricboss/src/data/repositories/cricket_repository_impl.dart';
 import 'package:cricboss/src/domain/models/cricket_models.dart';
@@ -34,9 +35,16 @@ final matchesProvider = StreamProvider(
 final cricketNewsProvider = FutureProvider(
   (ref) => CricketNewsService(ref.watch(dioProvider)).latest(),
 );
-final matchProvider = FutureProvider.family<CricketMatch, String>(
-  (ref, id) => ref.watch(cricketRepositoryProvider).getMatch(id),
-);
+final matchProvider = StreamProvider.family<CricketMatch, String>((
+  ref,
+  id,
+) async* {
+  final repository = ref.watch(cricketRepositoryProvider);
+  yield await repository.getMatch(id);
+  yield* Stream.periodic(
+    AppConfig.matchRefresh,
+  ).asyncMap((_) => repository.getMatch(id));
+});
 final overlayServiceProvider = Provider((ref) => OverlayService());
 final ttsServiceProvider = Provider((ref) => TtsService());
 final notificationServiceProvider = Provider(

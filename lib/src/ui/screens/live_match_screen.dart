@@ -40,15 +40,15 @@ class _LiveMatchScreenState extends ConsumerState<LiveMatchScreen> {
   }
 
   void _handleLiveSystems(CricketMatch match) {
+    if (ref.read(pinnedMatchIdProvider) == match.id) {
+      ref.read(notificationServiceProvider).showPinnedScore(match);
+    }
     if (match.commentary.isEmpty) return;
     final latest = match.commentary.first;
     if (_announcedEventId == latest.id) return;
     _announcedEventId = latest.id;
     if (!ref.read(enabledVoiceEventsProvider).contains(latest.type)) return;
     ref.read(notificationServiceProvider).showEvent(match, latest);
-    if (ref.read(pinnedMatchIdProvider) == match.id) {
-      ref.read(notificationServiceProvider).showPinnedScore(match);
-    }
     ref
         .read(ttsServiceProvider)
         .speak(latest, ref.read(voiceModeProvider), ref.read(languageProvider));
