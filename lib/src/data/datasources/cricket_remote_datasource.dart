@@ -90,11 +90,15 @@ class RapidApiCricketDataSource implements CricketDataSource {
         defaultStatus: MatchStatus.live,
       ),
       ..._parseLineMatches(
+        await _getRapidApi(
+          '/upcomingMatches',
+          ttl: AppConfig.upcomingMatchesCache,
+        ),
+        defaultStatus: MatchStatus.upcoming,
+      ),
+      ..._parseLineMatches(
         await _getRapidApi('/recentMatches', ttl: AppConfig.recentMatchesCache),
         defaultStatus: MatchStatus.completed,
-      ),
-      ..._parseSeries(
-        await _getRapidApi('/series', ttl: AppConfig.seriesCache),
       ),
     ];
     return _dedupeMatches(parsed);
@@ -173,7 +177,6 @@ class RapidApiCricketDataSource implements CricketDataSource {
     final items = _extractItems(payload);
     if (items is! List || items.isEmpty) return const [];
     return items
-        .take(60)
         .map(
           (item) => item is Map
               ? _parseLineMatch(item, defaultStatus: defaultStatus)
@@ -313,44 +316,6 @@ class RapidApiCricketDataSource implements CricketDataSource {
             : null,
       );
     }).toList();
-  }
-
-  List<CricketMatch> _parseSeries(dynamic payload) {
-    final groups = _extractItems(payload);
-    if (groups is! List || groups.isEmpty) return const [];
-    final matches = <CricketMatch>[];
-    for (final item in groups) {
-      if (item is! Map) continue;
-      final title = '${item['series'] ?? item['series_name'] ?? ''}';
-      if (title.isEmpty) continue;
-      final teams = _teamNames(item, title);
-      final id = '${item['series_id'] ?? title.hashCode}';
-      final teamA = Team(
-        id: teams.first.toLowerCase().replaceAll(' ', '-'),
-        name: teams.first,
-        shortName: _shortName(item, 0, teams.first),
-        country: teams.first,
-      );
-      final teamB = Team(
-        id: teams.last.toLowerCase().replaceAll(' ', '-'),
-        name: teams.last,
-        shortName: _shortName(item, 1, teams.last),
-        country: teams.last,
-      );
-      matches.add(
-        _emptyMatch('series-$id').copyWith(
-          id: 'series-$id',
-          title: title,
-          series: '${item['series_type'] ?? item['month_wise'] ?? 'Cricket'}',
-          venue: '${item['series_date'] ?? 'Schedule updating'}',
-          startTime: _parseDate(item['start_date']) ?? DateTime.now(),
-          status: MatchStatus.upcoming,
-          teamA: teamA,
-          teamB: teamB,
-        ),
-      );
-    }
-    return matches.take(20).toList();
   }
 
   dynamic _extractItems(dynamic payload) {

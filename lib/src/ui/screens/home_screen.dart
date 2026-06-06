@@ -1,5 +1,6 @@
 import 'package:cricboss/src/domain/models/cricket_models.dart';
 import 'package:cricboss/src/providers/app_providers.dart';
+import 'package:cricboss/src/services/local_storage_service.dart';
 import 'package:cricboss/src/ui/screens/favorites_screen.dart';
 import 'package:cricboss/src/ui/screens/live_match_screen.dart';
 import 'package:cricboss/src/ui/screens/match_list_screen.dart';
@@ -139,9 +140,14 @@ class _DashboardContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final availableMatches = _withSavedSnapshots(
+      matches,
+      savedIds,
+      LocalStorageService.instance.cachedMatches,
+    );
     final favoriteMatches = favorites.isEmpty
         ? const <CricketMatch>[]
-        : matches
+        : availableMatches
               .where(
                 (match) => favorites.any((team) => match.involvesTeam(team)),
               )
@@ -265,6 +271,20 @@ class _DashboardContent extends StatelessWidget {
 
   List<CricketMatch> _byStatus(List<CricketMatch> source, MatchStatus status) =>
       source.where((match) => match.status == status).toList();
+
+  List<CricketMatch> _withSavedSnapshots(
+    List<CricketMatch> current,
+    List<String> savedIds,
+    List<CricketMatch> cached,
+  ) {
+    final matches = {for (final match in current) match.id: match};
+    for (final match in cached) {
+      if (savedIds.contains(match.id)) {
+        matches.putIfAbsent(match.id, () => match);
+      }
+    }
+    return matches.values.toList();
+  }
 
   CricketMatch? _featuredMatch(List<CricketMatch> live) {
     if (live.isEmpty) return null;
