@@ -52,5 +52,6 @@ class FavoritesScreen extends ConsumerWidget {
         : [...selected, team];
     ref.read(favoriteTeamsProvider.notifier).state = next;
     await ref.read(storageProvider).setFavoriteTeams(next);
+    ref.invalidate(matchesProvider);
   }
 }

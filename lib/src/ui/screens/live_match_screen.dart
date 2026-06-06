@@ -68,7 +68,7 @@ class _MatchBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return DefaultTabController(
-      length: 5,
+      length: 4,
       child: Column(
         children: [
           _Header(match: match),
@@ -76,7 +76,6 @@ class _MatchBody extends ConsumerWidget {
             tabs: const [
               Tab(text: 'Summary'),
               Tab(text: 'Scorecard'),
-              Tab(text: 'Partnerships'),
               Tab(text: 'Commentary'),
               Tab(text: 'Playing XI'),
             ],
@@ -87,7 +86,6 @@ class _MatchBody extends ConsumerWidget {
               children: [
                 _Info(match: match),
                 _Scorecard(match: match),
-                _Partnerships(match: match),
                 _Commentary(match: match),
                 _PlayingXi(match: match),
               ],
@@ -541,35 +539,6 @@ class _PlayingXiState extends State<_PlayingXi> {
           for (final player in players.skip(11))
             _PlayerRow(player: player, substitute: true),
         ],
-      ],
-    );
-  }
-}
-
-class _Partnerships extends StatelessWidget {
-  const _Partnerships({required this.match});
-
-  final CricketMatch match;
-
-  @override
-  Widget build(BuildContext context) {
-    final milestones = match.commentary
-        .where((event) => event.type == AlertEventType.partnership)
-        .toList();
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        if (milestones.isEmpty)
-          const _EmptySection(
-            text: 'Partnership details will appear when provided by the API.',
-          )
-        else
-          for (final event in milestones)
-            ListTile(
-              leading: const Icon(Icons.handshake_outlined),
-              title: Text(event.text),
-              subtitle: Text(event.overLabel),
-            ),
       ],
     );
   }
