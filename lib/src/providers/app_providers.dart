@@ -27,6 +27,7 @@ final dioProvider = Provider(
 final cricketRepositoryProvider = Provider<CricketRepository>((ref) {
   return CricketRepositoryImpl(
     RapidApiCricketDataSource(ref.watch(dioProvider)),
+    ref.watch(storageProvider),
   );
 });
 final matchesProvider = StreamProvider(

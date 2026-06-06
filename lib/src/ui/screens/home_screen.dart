@@ -146,6 +146,7 @@ class _DashboardContent extends StatelessWidget {
         .where((match) => savedIds.contains(match.id))
         .toList();
     final featured = _featuredMatch(live);
+    final cached = matches.where((match) => match.isCached).toList();
 
     return RefreshIndicator(
       onRefresh: onRefresh,
@@ -157,6 +158,11 @@ class _DashboardContent extends StatelessWidget {
               icon: Icons.cloud_off,
               text:
                   'Live API unavailable. Pull to refresh or check the RapidAPI key.',
+            ),
+          if (!offline && cached.isNotEmpty)
+            _InfoBanner(
+              icon: Icons.history,
+              text: _cachedMessage(context, cached),
             ),
           Row(
             children: [
@@ -230,6 +236,19 @@ class _DashboardContent extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _cachedMessage(BuildContext context, List<CricketMatch> matches) {
+    final times = matches
+        .map((match) => match.lastUpdated)
+        .whereType<DateTime>()
+        .toList();
+    if (times.isEmpty) {
+      return 'Live updates are temporarily unavailable. Showing the last saved records.';
+    }
+    times.sort();
+    final time = TimeOfDay.fromDateTime(times.last.toLocal()).format(context);
+    return 'Live updates are temporarily unavailable. Showing records from $time.';
   }
 
   List<CricketMatch> _byStatus(MatchStatus status) =>

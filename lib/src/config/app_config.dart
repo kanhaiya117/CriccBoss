@@ -22,4 +22,5 @@ class AppConfig {
   static const matchInfoCache = Duration(minutes: 10);
   static const squadCache = Duration(minutes: 30);
   static const liveDetailCache = Duration(seconds: 20);
+  static const scorecardCache = Duration(minutes: 2);
 }

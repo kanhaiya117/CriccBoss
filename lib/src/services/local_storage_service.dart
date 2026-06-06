@@ -36,6 +36,58 @@ class LocalStorageService {
   Future<void> setSavedMatchIds(List<String> ids) =>
       _box.put('savedMatchIds', ids);
 
+  Future<void> cacheMatches(List<CricketMatch> matches) async {
+    final existing = {for (final match in cachedMatches) match.id: match};
+    final merged = [
+      for (final match in matches)
+        _mergeCachedDetail(match, existing[match.id]),
+    ];
+    await _box.put(
+      'cachedMatches',
+      merged.map((match) => match.toMap()).toList(),
+    );
+  }
+
+  List<CricketMatch> get cachedMatches {
+    final values = _box.get('cachedMatches', defaultValue: const <dynamic>[]);
+    if (values is! List) return const [];
+    return [
+      for (final value in values)
+        if (value is Map)
+          CricketMatch.fromMap(
+            Map<String, dynamic>.from(value),
+          ).copyWith(isCached: true),
+    ];
+  }
+
+  Future<void> cacheMatch(CricketMatch match) async {
+    final matches = cachedMatches.where((item) => item.id != match.id).toList();
+    matches.add(match.copyWith(isCached: false));
+    await cacheMatches(matches);
+  }
+
+  CricketMatch? cachedMatch(String id) {
+    for (final match in cachedMatches) {
+      if (match.id == id) return match;
+    }
+    return null;
+  }
+
+  CricketMatch _mergeCachedDetail(CricketMatch fresh, CricketMatch? existing) {
+    if (existing == null) return fresh;
+    return fresh.copyWith(
+      commentary: fresh.commentary.length >= existing.commentary.length
+          ? fresh.commentary
+          : existing.commentary,
+      scorecard:
+          fresh.scorecard.batting.isNotEmpty ||
+              fresh.scorecard.bowling.isNotEmpty
+          ? fresh.scorecard
+          : existing.scorecard,
+      players: fresh.players.isNotEmpty ? fresh.players : existing.players,
+    );
+  }
+
   Set<AlertEventType> get enabledVoiceEvents {
     final indexes = List<int>.from(
       _box.get(
