@@ -88,6 +88,57 @@ void main() {
     expect(matches.single.latestEvent, contains('Pakistan NEED'));
   });
 
+  test('RapidAPI upcoming payload parses every returned fixture', () {
+    final dataSource = RapidApiCricketDataSource(Dio());
+    final fixtures = List.generate(
+      80,
+      (index) => {
+        'match_id': index,
+        'team_a_id': index * 2,
+        'team_a': index == 79 ? 'India' : 'Team $index A',
+        'team_a_short': index == 79 ? 'IND' : 'T${index}A',
+        'team_b_id': index * 2 + 1,
+        'team_b': 'Team $index B',
+        'team_b_short': 'T${index}B',
+        'match_status': 'Upcoming',
+        'date_wise': '07 Jun 2026, Sunday',
+        'match_time': '07:30 PM',
+      },
+    );
+
+    final matches = dataSource.parseProviderMatchesForTest({
+      'data': fixtures,
+    }, defaultStatus: MatchStatus.upcoming);
+
+    expect(matches, hasLength(80));
+    expect(matches.last.teamA.name, 'India');
+    expect(matches.last.status, MatchStatus.upcoming);
+  });
+
+  test('RapidAPI Finished status parses as a completed result', () {
+    final dataSource = RapidApiCricketDataSource(Dio());
+    final matches = dataSource.parseProviderMatchesForTest({
+      'data': [
+        {
+          'match_id': 13413,
+          'team_a_id': 846,
+          'team_a': 'Bharat Rangers',
+          'team_a_short': 'BR',
+          'team_b_id': 845,
+          'team_b': 'India Warriors',
+          'team_b_short': 'IW',
+          'match_status': 'Finished',
+          'result': 'Bharat Rangers won by 7 wickets',
+          'date_wise': '05 Jun 2026, Friday',
+        },
+      ],
+    }, defaultStatus: MatchStatus.completed);
+
+    expect(matches, hasLength(1));
+    expect(matches.single.status, MatchStatus.completed);
+    expect(matches.single.result, 'Bharat Rangers won by 7 wickets');
+  });
+
   test('match cache serialization preserves detail data', () {
     final match = CricketMatch(
       id: '42',
