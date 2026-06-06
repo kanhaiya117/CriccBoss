@@ -33,7 +33,12 @@ class _LiveMatchScreenState extends ConsumerState<LiveMatchScreen> {
         ),
         data: (match) {
           _handleLiveSystems(match);
-          return _MatchBody(match: match);
+          return Column(
+            children: [
+              if (match.isCached) _CachedDataBanner(match: match),
+              Expanded(child: _MatchBody(match: match)),
+            ],
+          );
         },
       ),
     );
@@ -69,24 +74,57 @@ class _MatchBody extends ConsumerWidget {
           _Header(match: match),
           TabBar(
             tabs: const [
+              Tab(text: 'Summary'),
               Tab(text: 'Scorecard'),
               Tab(text: 'Commentary'),
-              Tab(text: 'Squads'),
-              Tab(text: 'Info'),
+              Tab(text: 'Playing XI'),
             ],
             isScrollable: true,
           ),
           Expanded(
             child: TabBarView(
               children: [
-                _Scorecard(scorecard: match.scorecard),
-                _Commentary(match: match),
-                _Squads(match: match),
                 _Info(match: match),
+                _Scorecard(match: match),
+                _Commentary(match: match),
+                _PlayingXi(match: match),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CachedDataBanner extends StatelessWidget {
+  const _CachedDataBanner({required this.match});
+
+  final CricketMatch match;
+
+  @override
+  Widget build(BuildContext context) {
+    final updated = match.lastUpdated;
+    final time = updated == null
+        ? 'the last successful update'
+        : TimeOfDay.fromDateTime(updated.toLocal()).format(context);
+    final scheme = Theme.of(context).colorScheme;
+    return ColoredBox(
+      color: scheme.tertiaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            Icon(Icons.cloud_off, size: 18, color: scheme.onTertiaryContainer),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Live updates are temporarily unavailable. Showing records from $time.',
+                style: TextStyle(color: scheme.onTertiaryContainer),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -417,154 +455,400 @@ class _Commentary extends StatelessWidget {
   );
 }
 
-class _Scorecard extends StatelessWidget {
-  const _Scorecard({required this.scorecard});
-  final Scorecard scorecard;
-
-  @override
-  Widget build(BuildContext context) => ListView(
-    padding: const EdgeInsets.all(16),
-    children: [
-      Text('Batting', style: Theme.of(context).textTheme.titleLarge),
-      DataTable(
-        columns: const [
-          DataColumn(label: Text('Batter')),
-          DataColumn(label: Text('R')),
-          DataColumn(label: Text('B')),
-          DataColumn(label: Text('4/6')),
-          DataColumn(label: Text('SR')),
-        ],
-        rows: [
-          for (final line in scorecard.batting)
-            DataRow(
-              color: WidgetStatePropertyAll(
-                line == scorecard.batting.first
-                    ? Theme.of(
-                        context,
-                      ).colorScheme.primaryContainer.withValues(alpha: .35)
-                    : null,
-              ),
-              cells: [
-                DataCell(Text(line.playerName)),
-                DataCell(Text('${line.runs}')),
-                DataCell(Text('${line.balls}')),
-                DataCell(Text('${line.fours}/${line.sixes}')),
-                DataCell(Text(_strikeRate(line))),
-              ],
-            ),
-        ],
-      ),
-      const SizedBox(height: 18),
-      Text('Bowling', style: Theme.of(context).textTheme.titleLarge),
-      DataTable(
-        columns: const [
-          DataColumn(label: Text('Bowler')),
-          DataColumn(label: Text('O')),
-          DataColumn(label: Text('M')),
-          DataColumn(label: Text('R')),
-          DataColumn(label: Text('W/Eco')),
-        ],
-        rows: [
-          for (final line in scorecard.bowling)
-            DataRow(
-              cells: [
-                DataCell(Text(line.playerName)),
-                DataCell(Text('${line.overs}')),
-                DataCell(Text('${line.maidens}')),
-                DataCell(Text('${line.runs}')),
-                DataCell(
-                  Text('${line.wickets}/${line.economy.toStringAsFixed(1)}'),
-                ),
-              ],
-            ),
-        ],
-      ),
-    ],
-  );
-
-  String _strikeRate(BattingLine line) => line.balls == 0
-      ? '-'
-      : ((line.runs / line.balls) * 100).toStringAsFixed(1);
-}
-
-class _Squads extends StatelessWidget {
-  const _Squads({required this.match});
+class _Scorecard extends StatefulWidget {
+  const _Scorecard({required this.match});
   final CricketMatch match;
 
   @override
+  State<_Scorecard> createState() => _ScorecardState();
+}
+
+class _ScorecardState extends State<_Scorecard> {
+  late String _teamId = widget.match.teamA.id;
+
+  @override
   Widget build(BuildContext context) {
-    final teamA = match.players
-        .where((player) => player.teamId == match.teamA.id)
+    final match = widget.match;
+    final batting = match.scorecard.batting
+        .where((line) => line.teamId == null || line.teamId == _teamId)
         .toList();
-    final teamB = match.players
-        .where((player) => player.teamId == match.teamB.id)
-        .toList();
+    final bowling = match.scorecard.bowling;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _SquadSection(team: match.teamA, players: teamA),
+        _TeamSelector(
+          teamA: match.teamA,
+          teamB: match.teamB,
+          selectedId: _teamId,
+          onSelected: (id) => setState(() => _teamId = id),
+        ),
         const SizedBox(height: 18),
-        _SquadSection(team: match.teamB, players: teamB),
+        const _ScoreHeader(),
+        if (batting.isEmpty)
+          const _EmptySection(text: 'Scorecard is not available yet.')
+        else
+          for (final line in batting) _BatterRow(line: line),
+        if (bowling.isNotEmpty) ...[
+          const SizedBox(height: 22),
+          Text('BOWLERS', style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 8),
+          for (final line in bowling) _BowlerRow(line: line),
+        ],
       ],
     );
   }
 }
 
-class _SquadSection extends StatelessWidget {
-  const _SquadSection({required this.team, required this.players});
-  final Team team;
-  final List<Player> players;
+class _PlayingXi extends StatefulWidget {
+  const _PlayingXi({required this.match});
+  final CricketMatch match;
+
+  @override
+  State<_PlayingXi> createState() => _PlayingXiState();
+}
+
+class _PlayingXiState extends State<_PlayingXi> {
+  late String _teamId = widget.match.teamA.id;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              team.name,
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+    final match = widget.match;
+    final players = match.players
+        .where((player) => player.teamId == _teamId)
+        .toList();
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _TeamSelector(
+          teamA: match.teamA,
+          teamB: match.teamB,
+          selectedId: _teamId,
+          onSelected: (id) => setState(() => _teamId = id),
+        ),
+        const SizedBox(height: 18),
+        Text('PLAYING XI', style: Theme.of(context).textTheme.labelLarge),
+        const SizedBox(height: 8),
+        if (players.isEmpty)
+          const _EmptySection(text: 'Playing XI is not available yet.')
+        else
+          for (final player in players.take(11)) _PlayerRow(player: player),
+        if (players.length > 11) ...[
+          const SizedBox(height: 22),
+          Text('SUBSTITUTES', style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 8),
+          for (final player in players.skip(11))
+            _PlayerRow(player: player, substitute: true),
+        ],
+      ],
+    );
+  }
+}
+
+class _TeamSelector extends StatelessWidget {
+  const _TeamSelector({
+    required this.teamA,
+    required this.teamB,
+    required this.selectedId,
+    required this.onSelected,
+  });
+
+  final Team teamA;
+  final Team teamB;
+  final String selectedId;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          for (final team in [teamA, teamB])
+            Expanded(
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => onSelected(team.id),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: selectedId == team.id
+                        ? scheme.primaryContainer
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    team.shortName,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: selectedId == team.id
+                          ? scheme.primary
+                          : scheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
             ),
-            const SizedBox(height: 8),
-            Text('Playing XI', style: Theme.of(context).textTheme.labelLarge),
-            for (final entry in players.take(11).indexed)
-              ListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.person),
-                title: Text(
-                  '${entry.$2.name}${entry.$1 == 0
-                      ? ' (C)'
-                      : entry.$1 == 1
-                      ? ' (WK)'
-                      : ''}',
+        ],
+      ),
+    );
+  }
+}
+
+class _ScoreHeader extends StatelessWidget {
+  const _ScoreHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.labelMedium;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Expanded(flex: 5, child: Text('BATTERS', style: style)),
+          for (final label in const ['R', 'B', '4s', '6s', 'SR'])
+            SizedBox(
+              width: label == 'SR' ? 48 : 34,
+              child: Text(label, textAlign: TextAlign.center, style: style),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BatterRow extends StatelessWidget {
+  const _BatterRow({required this.line});
+
+  final BattingLine line;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 5,
+            child: Row(
+              children: [
+                _InitialAvatar(name: line.playerName),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        line.playerName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        line.outText,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
                 ),
-                subtitle: Text(entry.$2.role),
-              ),
-            if (players.length > 11) ...[
-              const Divider(),
-              Text(
-                'Substitutes',
-                style: Theme.of(context).textTheme.labelLarge,
-              ),
-              for (final player in players.skip(11))
-                ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.swap_horiz),
-                  title: Text(player.name),
-                  subtitle: Text(player.role),
+              ],
+            ),
+          ),
+          _ScoreValue('${line.runs}', bold: true),
+          _ScoreValue('${line.balls}'),
+          _ScoreValue('${line.fours}'),
+          _ScoreValue('${line.sixes}'),
+          _ScoreValue(_strikeRate(line), wide: true),
+        ],
+      ),
+    );
+  }
+
+  String _strikeRate(BattingLine line) => line.balls == 0
+      ? '-'
+      : ((line.runs / line.balls) * 100).toStringAsFixed(2);
+}
+
+class _BowlerRow extends StatelessWidget {
+  const _BowlerRow({required this.line});
+
+  final BowlingLine line;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 13),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _InitialAvatar(name: line.playerName),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  line.playerName,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
-            ],
-          ],
+                const SizedBox(height: 4),
+                Text(
+                  '${line.overs} O  ${line.maidens} M  ${line.runs} R  '
+                  '${line.wickets} W  ${line.economy.toStringAsFixed(2)} ECO',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScoreValue extends StatelessWidget {
+  const _ScoreValue(this.value, {this.bold = false, this.wide = false});
+
+  final String value;
+  final bool bold;
+  final bool wide;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: wide ? 48 : 34,
+    child: Text(
+      value,
+      textAlign: TextAlign.center,
+      style: TextStyle(fontWeight: bold ? FontWeight.w900 : FontWeight.w500),
+    ),
+  );
+}
+
+class _PlayerRow extends StatelessWidget {
+  const _PlayerRow({required this.player, this.substitute = false});
+
+  final Player player;
+  final bool substitute;
+
+  @override
+  Widget build(BuildContext context) {
+    final role = player.role.toLowerCase();
+    final hasMarker =
+        player.name.contains('(C)') || player.name.contains('(WK)');
+    final suffix = hasMarker
+        ? ''
+        : role.contains('captain')
+        ? ' (C)'
+        : role.contains('wicket')
+        ? ' (WK)'
+        : '';
+    final detail = [
+      if (player.battingStyle?.isNotEmpty ?? false) player.battingStyle,
+      player.role,
+    ].whereType<String>().join(' • ');
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 13),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        ),
+      ),
+      child: Row(
+        children: [
+          _InitialAvatar(name: player.name),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${player.name}$suffix',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  substitute ? 'Substitute • $detail' : detail,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InitialAvatar extends StatelessWidget {
+  const _InitialAvatar({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final cleaned = name.replaceAll(RegExp(r'\([^)]*\)'), '').trim();
+    final parts = cleaned.split(RegExp(r'\s+'));
+    final initials = parts
+        .take(2)
+        .where((part) => part.isNotEmpty)
+        .map((part) => part[0].toUpperCase())
+        .join();
+    return CircleAvatar(
+      radius: 20,
+      backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+      child: Text(
+        initials,
+        style: TextStyle(
+          color: Theme.of(context).colorScheme.onSecondaryContainer,
+          fontWeight: FontWeight.w900,
+          fontSize: 12,
         ),
       ),
     );
   }
+}
+
+class _EmptySection extends StatelessWidget {
+  const _EmptySection({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 32),
+    child: Column(
+      children: [
+        Icon(
+          Icons.hourglass_empty,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          text,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+      ],
+    ),
+  );
 }
 
 class _Info extends StatelessWidget {

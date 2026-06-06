@@ -87,4 +87,71 @@ void main() {
     expect(matches.single.scoreSummary, contains('PAK 41/1'));
     expect(matches.single.latestEvent, contains('Pakistan NEED'));
   });
+
+  test('match cache serialization preserves detail data', () {
+    final match = CricketMatch(
+      id: '42',
+      title: 'India v Australia',
+      series: 'Test Series',
+      venue: 'Melbourne',
+      startTime: DateTime.utc(2026, 6, 6),
+      status: MatchStatus.live,
+      teamA: const Team(
+        id: '1',
+        name: 'India',
+        shortName: 'IND',
+        country: 'India',
+      ),
+      teamB: const Team(
+        id: '2',
+        name: 'Australia',
+        shortName: 'AUS',
+        country: 'Australia',
+      ),
+      scores: const [
+        InningsScore(teamId: '1', runs: 120, wickets: 2, overs: 20),
+      ],
+      commentary: [
+        CommentaryEvent(
+          id: 'event-1',
+          over: 19,
+          ball: 6,
+          text: 'Four',
+          type: AlertEventType.four,
+          timestamp: DateTime.utc(2026, 6, 6, 12),
+        ),
+      ],
+      scorecard: const Scorecard(
+        batting: [
+          BattingLine(
+            playerName: 'Virat Kohli',
+            runs: 75,
+            balls: 42,
+            fours: 9,
+            sixes: 3,
+            teamId: '1',
+          ),
+        ],
+        bowling: [],
+      ),
+      players: const [
+        Player(
+          id: 'p1',
+          name: 'Virat Kohli',
+          role: 'Batsman',
+          teamId: '1',
+          battingStyle: 'Right Hand Batting',
+        ),
+      ],
+      lastUpdated: DateTime.utc(2026, 6, 6, 12),
+    );
+
+    final restored = CricketMatch.fromMap(match.toMap());
+
+    expect(restored.id, match.id);
+    expect(restored.scorecard.batting.single.teamId, '1');
+    expect(restored.players.single.battingStyle, 'Right Hand Batting');
+    expect(restored.commentary.single.type, AlertEventType.four);
+    expect(restored.lastUpdated, match.lastUpdated);
+  });
 }

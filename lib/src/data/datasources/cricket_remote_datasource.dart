@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 abstract class CricketDataSource {
   Future<List<CricketMatch>> getMatches();
   Future<CricketMatch> getMatch(String id);
+  bool get usedStaleCache;
+  DateTime? get lastSuccessfulUpdate;
 }
 
 class RapidApiCricketDataSource implements CricketDataSource {
@@ -13,16 +15,25 @@ class RapidApiCricketDataSource implements CricketDataSource {
 
   final Dio _dio;
   final Map<String, _CacheEntry<dynamic>> _cache = {};
+  bool _usedStaleCache = false;
+  DateTime? _lastSuccessfulUpdate;
+
+  @override
+  bool get usedStaleCache => _usedStaleCache;
+
+  @override
+  DateTime? get lastSuccessfulUpdate => _lastSuccessfulUpdate;
 
   @override
   Future<List<CricketMatch>> getMatches() async {
-    final rapidApi = await _tryRapidApiCricket();
+    final rapidApi = await _tryRapidApiCricket(resetState: true);
     if (rapidApi.isNotEmpty) return rapidApi;
     return const [];
   }
 
   @override
   Future<CricketMatch> getMatch(String id) async {
+    _resetRequestState();
     if (id.startsWith('series-')) {
       final matches = await getMatches();
       return matches.firstWhere(
@@ -37,7 +48,7 @@ class RapidApiCricketDataSource implements CricketDataSource {
     );
     final scorecard = await _getRapidApi(
       '/match/$id/scorecard',
-      ttl: AppConfig.liveDetailCache,
+      ttl: AppConfig.scorecardCache,
     );
     final commentary = await _getRapidApi(
       '/match/$id/commentary',
@@ -68,7 +79,10 @@ class RapidApiCricketDataSource implements CricketDataSource {
     throw StateError('Match not found');
   }
 
-  Future<List<CricketMatch>> _tryRapidApiCricket() async {
+  Future<List<CricketMatch>> _tryRapidApiCricket({
+    required bool resetState,
+  }) async {
+    if (resetState) _resetRequestState();
     if (AppConfig.rapidApiCricketKey.isEmpty) return const [];
     final parsed = <CricketMatch>[
       ..._parseLineMatches(
@@ -106,19 +120,27 @@ class RapidApiCricketDataSource implements CricketDataSource {
         ),
       );
       _cache[path] = _CacheEntry(response.data, now);
+      _lastSuccessfulUpdate = now;
       return response.data;
     } catch (error) {
-      if (cached != null) return cached.value;
+      if (cached != null) {
+        _usedStaleCache = true;
+        return cached.value;
+      }
       return null;
     }
   }
 
   Future<CricketMatch?> _findMatchFromList(String id) async {
-    final matches = await getMatches();
+    final matches = await _tryRapidApiCricket(resetState: false);
     for (final match in matches) {
       if (match.id == id) return match;
     }
     return null;
+  }
+
+  void _resetRequestState() {
+    _usedStaleCache = false;
   }
 
   CricketMatch? _mergeListMatch(CricketMatch? detail, CricketMatch? list) {
@@ -497,6 +519,8 @@ class RapidApiCricketDataSource implements CricketDataSource {
     final bowling = <BowlingLine>[];
     for (final inning in (data['scorecard'] as Map).values) {
       if (inning is! Map) continue;
+      final team = inning['team'];
+      final battingTeamId = team is Map ? '${team['team_id'] ?? ''}' : null;
       final batsmen = inning['batsman'];
       if (batsmen is List) {
         for (final item in batsmen.whereType<Map>()) {
@@ -508,6 +532,7 @@ class RapidApiCricketDataSource implements CricketDataSource {
               fours: _int(item['fours']),
               sixes: _int(item['sixes']),
               outText: '${item['out_by'] ?? 'not out'}',
+              teamId: battingTeamId,
             ),
           );
         }
@@ -522,6 +547,7 @@ class RapidApiCricketDataSource implements CricketDataSource {
               runs: _int(item['run']),
               wickets: _int(item['wicket']),
               maidens: _int(item['maiden']),
+              teamId: null,
             ),
           );
         }
@@ -586,6 +612,12 @@ class RapidApiCricketDataSource implements CricketDataSource {
             name: '${item['name'] ?? 'Player'}',
             role: '${item['play_role'] ?? 'Player'}',
             teamId: team.id,
+            battingStyle: _stringOrNull(
+              item['batting_style'] ?? item['battingStyle'],
+            ),
+            bowlingStyle: _stringOrNull(
+              item['bowling_style'] ?? item['bowlingStyle'],
+            ),
           ),
         );
       }
