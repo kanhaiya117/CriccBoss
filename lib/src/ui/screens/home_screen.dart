@@ -139,14 +139,24 @@ class _DashboardContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final live = _byStatus(MatchStatus.live);
-    final upcoming = _byStatus(MatchStatus.upcoming);
-    final results = _byStatus(MatchStatus.completed).take(2).toList();
-    final saved = matches
+    final favoriteMatches = favorites.isEmpty
+        ? const <CricketMatch>[]
+        : matches
+              .where(
+                (match) => favorites.any((team) => match.involvesTeam(team)),
+              )
+              .toList();
+    final live = _byStatus(favoriteMatches, MatchStatus.live);
+    final upcoming = _byStatus(favoriteMatches, MatchStatus.upcoming);
+    final results = _byStatus(
+      favoriteMatches,
+      MatchStatus.completed,
+    ).take(2).toList();
+    final saved = favoriteMatches
         .where((match) => savedIds.contains(match.id))
         .toList();
     final featured = _featuredMatch(live);
-    final cached = matches.where((match) => match.isCached).toList();
+    final cached = favoriteMatches.where((match) => match.isCached).toList();
 
     return RefreshIndicator(
       onRefresh: onRefresh,
@@ -181,9 +191,11 @@ class _DashboardContent extends StatelessWidget {
           if (featured != null)
             MatchCard(match: featured, onTap: () => onOpen(featured.id))
           else
-            const _InfoBanner(
+            _InfoBanner(
               icon: Icons.event_available,
-              text: 'No live match available from the API right now.',
+              text: favorites.isEmpty
+                  ? 'No favorite team selected.'
+                  : 'No live match is available for your favorite teams right now.',
             ),
           const SizedBox(height: 18),
           GridView.count(
@@ -251,19 +263,13 @@ class _DashboardContent extends StatelessWidget {
     return 'Live updates are temporarily unavailable. Showing records from $time.';
   }
 
-  List<CricketMatch> _byStatus(MatchStatus status) =>
-      matches.where((match) => match.status == status).toList();
+  List<CricketMatch> _byStatus(List<CricketMatch> source, MatchStatus status) =>
+      source.where((match) => match.status == status).toList();
 
   CricketMatch? _featuredMatch(List<CricketMatch> live) {
     if (live.isEmpty) return null;
-    final india = live.where((match) => match.involvesTeam('India')).toList();
-    if (india.isNotEmpty) return india.first;
     final ipl = live.where((match) => match.isIpl).toList();
     if (ipl.isNotEmpty) return ipl.first;
-    final favorite = live
-        .where((match) => favorites.any((team) => match.involvesTeam(team)))
-        .toList();
-    if (favorite.isNotEmpty) return favorite.first;
     return live.first;
   }
 
